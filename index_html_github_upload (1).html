@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Minecraft PE — Моды (GitHub Upload)</title>
+<script src="https://cdn.tailwindcss.com">
+
+//--------------------------------------------------
+// ФУНКЦИЯ: загрузка и отображение списка модов из GitHub
+//--------------------------------------------------
+async function loadModsFromGitHub() {
+  const url = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${GITHUB_MODS_DIR}`;
+
+  const response = await fetch(url);
+  if (!response.ok) {
+    console.error("❌ Не удалось получить список модов", await response.text());
+    return;
+  }
+
+  const files = await response.json();
+  const list = document.getElementById("mods-list");
+  list.innerHTML = "";
+
+  const grouped = {};
+  files.forEach(f => {
+    const parts = f.name.split("_"); // пример группировки: CoolMod_file1.mcpack → CoolMod
+    const modName = parts[0];
+
+    if (!grouped[modName]) grouped[modName] = [];
+
+    grouped[modName].push({
+      file: f.name,
+      download: f.download_url
+    });
+  });
+
+  Object.keys(grouped).forEach(mod => {
+    const box = document.createElement("div");
+    box.className = "card bg-slate-800/70 p-4 rounded-xl mb-4";
+
+    let html = `<h2 class='text-xl font-bold mb-2'>${mod}</h2>`;
+    grouped[mod].forEach(f => {
+      html += `<button class='bg-slate-600 px-3 py-1 rounded mt-1 block' onclick=\"window.location.href='${f.download}'\">${f.file}</button>`;
+    });
+
+    box.innerHTML = html;
+    list.appendChild(box);
+  });
+}
+
+window.onload = () => {
+  const saved = localStorage.getItem("owner_token");
+  if (saved) { OWNER_TOKEN = saved; isOwner = true; document.getElementById("add-form").classList.remove("hidden"); }
+  loadModsFromGitHub();
+};
+
+</script>
+<style>
+  body { background: linear-gradient(135deg, #0c0c0c, #1b1b1b, #003300); font-family: Arial, sans-serif; }
+  .card { transition: .2s; }
+  .card:hover { transform: scale(1.03); }
+</style>
+<script>
+// === НАСТРОЙКИ ГИТХАБ ===
+const GITHUB_USER = "miniModmf";
+const GITHUB_REPO = "mcpe-mods-site";
+const GITHUB_MODS_DIR = "mods";
+
+let OWNER_TOKEN = null;
+let isOwner = false;
+
+function authOwner() {
+  const token = prompt("Введите GitHub TOKEN (не показывайте никому):");
+  if (!token) return alert("Токен не введён");
+  OWNER_TOKEN = token;
+  isOwner = true;
+  localStorage.setItem("owner_token", token);
+  document.getElementById("add-form").classList.remove("hidden");
+  alert("✅ Вход выполнен — теперь вы можете добавлять моды");
+}
+
+async function githubUpload(path, content) {
+  const url = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${path}`;
+
+  const req = await fetch(url, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `token ${OWNER_TOKEN}`,
+    },
+    body: JSON.stringify({
+      message: "Добавление мода",
+      content: content,
+    }),
+  });
+
+  if (!req.ok) {
+    const error = await req.json();
+    console.error(error);
+    alert("❌ Ошибка загрузки. Проверь токен и права repo.");
+    return null;
+  }
+
+  return await req.json();
+}
+
+async function uploadModToGitHub(name, file) {
+  const reader = new FileReader();
+  reader.readAsDataURL(file);
+  reader.onload = async () => {
+    const base64 = reader.result.split(",")[1];
+    const path = `${GITHUB_MODS_DIR}/${file.name}`;
+
+    await githubUpload(path, base64);
+    alert(`✅ Мод загружен: ${file.name}`);
+  };
+}
+
+async function addMod(event) {
+  event.preventDefault();
+  if (!isOwner) return alert("❌ Только владелец может добавлять моды");
+
+  const name = document.getElementById("mod-name").value;
+  const modFiles = Array.from(document.getElementById("mod-files").files);
+
+  if (!name.trim()) return alert("Введите название мода");
+  if (modFiles.length === 0) return alert("Выберите файлы мода");
+
+  for (const f of modFiles) await uploadModToGitHub(name, f);
+  event.target.reset();
+}
+</script>
+</head>
+<body class="text-white p-6">
+<div class="max-w-4xl mx-auto">
+
+  <h1 class="text-3xl font-bold mb-4">Minecraft PE — Моды (GitHub Upload)</h1>
+
+  <button onclick="authOwner()" class="px-4 py-2 bg-emerald-600 rounded mb-4">Я владелец (вход)</button>
+
+  <form id="add-form" class="hidden bg-slate-900 p-4 rounded-xl mb-6" onsubmit="addMod(event)">
+    <input id="mod-name" placeholder="Название мода" class="w-full p-2 rounded bg-slate-700 mb-3" required />
+    <label>Файлы мода (можно несколько):</label>
+    <input id="mod-files" type="file" multiple class="mb-4 w-full" />
+    <button class="px-4 py-2 bg-green-500 rounded text-black font-bold">Добавить мод</button>
+  </form>
+
+  <p class="text-slate-400 text-sm">Моды загружаются в GitHub → /mods</p>
+
+</div>
+</body>
+</html>
