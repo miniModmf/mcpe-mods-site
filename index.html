@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Minecraft PE — Моды</title>
+
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { background: linear-gradient(135deg, #0c0c0c, #1b1b1b, #003300); font-family: Arial, sans-serif; }
+  .card { transition: 0.2s; }
+  .card:hover { transform: scale(1.02); }
+</style>
+
+<script>
+const OWNER_PASSWORD = "1234"; // смените пароль
+
+let isOwner = false;
+
+function authOwner() {
+  const pwd = prompt("Введите пароль для добавления модов:");
+  if (pwd === OWNER_PASSWORD) {
+    isOwner = true;
+    document.getElementById("add-form").classList.remove("hidden");
+    alert("Доступ разрешён ✅");
+  } else {
+    alert("Неверный пароль ❌");
+  }
+}
+
+function saveMods(mods) {
+  localStorage.setItem("minecraft_mods", JSON.stringify(mods));
+}
+
+function loadMods() {
+  return JSON.parse(localStorage.getItem("minecraft_mods") || "[]");
+}
+
+async function readFileAsDataURL(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve({ name: file.name, dataUrl: reader.result });
+    reader.onerror = (e) => reject(e);
+    reader.readAsDataURL(file);
+  });
+}
+
+async function addMod(event) {
+  event.preventDefault();
+  if (!isOwner) return alert("Только владелец может добавлять моды");
+
+  const name = document.getElementById("mod-name").value;
+  const thumbnail = document.getElementById("mod-thumbnail").files[0];
+  const files = Array.from(document.getElementById("mod-files").files);
+
+  if (!name.trim()) return alert("Введите название мода");
+
+  let mods = loadMods();
+
+  let thumb = null;
+  if (thumbnail) thumb = await readFileAsDataURL(thumbnail);
+
+  const filesData = [];
+  for (const f of files) filesData.push(await readFileAsDataURL(f));
+
+  mods.unshift({ id: Date.now(), name, thumbnail: thumb, files: filesData });
+
+  saveMods(mods);
+  renderMods();
+  event.target.reset();
+}
+
+function downloadFile(dataUrl, name) {
+  const a = document.createElement("a");
+  a.href = dataUrl;
+  a.download = name;
+  a.click();
+}
+
+function removeMod(id) {
+  let mods = loadMods();
+  mods = mods.filter(m => m.id !== id);
+  saveMods(mods);
+  renderMods();
+}
+
+function renderMods() {
+  const list = document.getElementById("mods-list");
+  const search = document.getElementById("search").value.toLowerCase();
+  const mods = loadMods().filter(m => m.name.toLowerCase().includes(search));
+
+  list.innerHTML = "";
+  mods.forEach(mod => {
+    const card = document.createElement("div");
+    card.className = "card bg-slate-800/70 p-4 rounded-xl";
+
+    card.innerHTML = `
+      <h2 class="text-xl font-bold mb-2">${mod.name}</h2>
+      ${mod.thumbnail ? `<img src="${mod.thumbnail.dataUrl}" class="w-full h-40 object-cover rounded mb-3" />` : ""}
+      <p class="font-semibold mb-1">Файлы:</p>
+      ${(mod.files.length === 0) ? "Нет файлов" : mod.files.map(f => `<button class="bg-slate-600 px-2 py-1 rounded mt-1 block" onclick="downloadFile('${f.dataUrl}', '${f.name}')">${f.name}</button>`).join("")}
+      ${isOwner ? `<button onclick="removeMod(${mod.id})" class="bg-red-600 px-3 py-1 rounded mt-3">Удалить</button>` : ""}
+    `;
+    list.appendChild(card);
+  });
+}
+
+window.onload = () => renderMods();
+</script>
+</head>
+
+<body class="text-white p-6">
+<div class="max-w-4xl mx-auto">
+
+  <h1 class="text-3xl font-bold mb-4">Minecraft PE — Моды</h1>
+  <button onclick="authOwner()" class="px-4 py-2 bg-emerald-600 rounded mb-4">Я владелец (вход)</button>
+
+  <input id="search" oninput="renderMods()" placeholder="Поиск модов..." class="w-full p-2 rounded bg-slate-700 mb-4"/>
+
+  <form id="add-form" class="hidden bg-slate-900 p-4 rounded-xl mb-6" onsubmit="addMod(event)">
+    <input id="mod-name" placeholder="Название мода" class="w-full p-2 rounded bg-slate-700 mb-2" required />
+    <label>Миниатюра:</label>
+    <input id="mod-thumbnail" type="file" accept="image/*" class="mb-2 w-full" />
+    <label>Файлы (можно несколько):</label>
+    <input id="mod-files" type="file" multiple class="mb-4 w-full" />
+    <button class="px-4 py-2 bg-green-500 rounded text-black font-bold">Добавить мод</button>
+  </form>
+
+  <div id="mods-list" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+
+</div>
+</body>
+</html>
